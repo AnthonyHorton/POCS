@@ -382,17 +382,19 @@ class AbstractCamera(PanBase, metaclass=ABCMeta):
         assert filename is not None, self.logger.error("Must pass filename for take_exposure")
 
         if not self.can_take_internal_darks:
-            if self.filterwheel and self.filterwheel.dark_position:
-                if dark:
-                    msg = "Taking dark exposure using filter '" + \
-                        f"{self.filterwheel.filter_names[self.filterwheel.dark_position]}'."
-                    self.logger.debug(msg)
-                    self.filterwheel.move_to_dark_position(blocking=True)
-                else:
-                    self.filterwheel.move_to_light_position(blocking=True)
-            else:
+            if dark and self.filterwheel and self.filterwheel.dark_position:
+                # Can't take internal darks, but do have an opaque filter for that.
+                msg = "Taking dark exposure using filter '" + \
+                    f"{self.filterwheel.filter_names[self.filterwheel.dark_position - 1}'."
+                self.logger.debug(msg)
+                self.filterwheel.move_to_dark_position(blocking=True)
+            elif dark:
+                # Can't take internal darks and don't have an opaque filter either.
                 msg = "Taking dark exposure without shutter or opaque filter. Is the lens cap on?"
                 self.logger.warning(msg)
+            elif self.filterwheel and self.filterwheel.dark_position:
+                # Not taking a dark, make sure don't have an opaque filter in the way.
+                self.filterwheel.move_to_light_position(blocking=True)
 
         # Check that the camera (and subcomponents) is ready
         if not self.is_ready:
