@@ -216,8 +216,9 @@ def get_root_logger(profile='panoptes', log_config=None):
             # TODO(jamessynge): Raise a custom exception in this case instead
             # of issuing a warning; after all, a standard dict will throw a
             # KeyError in the for loop below if 'formatters' is missing.
-            warn('formatters is missing from log_config!')
-            warn(f'log_config: {log_config!r}')
+            #warn('formatters is missing from log_config!')
+            #warn(f'log_config: {log_config!r}')
+            pass
 
         log_fname_datetime = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
 

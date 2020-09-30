@@ -43,6 +43,10 @@ def vollath_F4(data, axis=None):
     Returns:
         float64: Calculated F4 value for y, x axis or both
     """
+    # This calculation is prone to integer overflow if data is an integer type
+    # so convert to float64 before doing anything else.
+    data = data.astype(np.float64)
+
     if axis == 'Y' or axis == 'y':
         return _vollath_F4_y(data)
     elif axis == 'X' or axis == 'x':
@@ -61,7 +65,7 @@ def mask_saturated(data, saturation_level=None, threshold=0.9, dtype=np.float64)
             dtype_info = np.iinfo(data.dtype)
         except ValueError:
             # Not an integer type. Assume for now we have 16 bit data
-            saturation_level = threshold * (2**16 - 1)
+            saturation_level = threshold * (2**12 - 1)
         else:
             # Data is an integer type, set saturation level at specified fraction of
             # max value for the type

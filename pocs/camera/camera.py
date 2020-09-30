@@ -415,35 +415,48 @@ class AbstractCamera(PanBase, metaclass=ABCMeta):
         exptime = info['exptime']
         field_name = info['field_name']
 
+        max_wait_time = 120
+        retry_interval = 1
+        timer = CountdownTimer(duration=max_wait_time)
+        while not os.path.exists(file_path):
+            if timer.expired():
+                observation_event.set()
+                raise error.Timeout(f"{self.name}: FITS file '{file_path}' not found after {max_wait_time}s, abandoning.")
+            self.logger.debug(f"{self.name}: FITS file '{file_path}' not found. Waiting another {retry_interval}s")
+            time.sleep(retry_interval)
+
         image_title = '{} [{}s] {} {}'.format(field_name,
                                               exptime,
                                               seq_id.replace('_', ' '),
                                               current_time(pretty=True))
 
         try:
-            self.logger.debug("Processing {}".format(image_title))
-            img_utils.make_pretty_image(file_path,
-                                        title=image_title,
-                                        link_latest=info['is_primary'])
+            self.logger.debug(f"{self.name}: Skipping pretty image for {image_title}")
+            # self.logger.debug("Processing {}".format(image_title))
+            # img_utils.make_pretty_image(file_path,
+            #                            title=image_title,
+            #                            link_latest=info['is_primary'])
         except Exception as e:  # pragma: no cover
-            self.logger.warning('Problem with extracting pretty image: {}'.format(e))
+            self.logger.warning(f'{self.name}: Problem with extracting pretty image: {e}')
 
         file_path = self._process_fits(file_path, info)
-        self.logger.debug("Finished processing FITS.")
+        self.logger.debug(f"{self.name}: Finished processing FITS.")
+
         with suppress(Exception):
             info['exptime'] = info['exptime'].value
 
         if info['is_primary']:
-            self.logger.debug("Adding current observation to db: {}".format(image_id))
+            self.logger.debug(f"{self.name}: Adding current observation to db: {image_id}")
             try:
                 self.db.insert_current('observations', info, store_permanently=False)
             except Exception as e:
                 self.logger.error('Problem adding observation to db: {}'.format(e))
         else:
-            self.logger.debug('Compressing {}'.format(file_path))
-            fits_utils.fpack(file_path)
+            self.logger.debug(f'{self.name}: Skipping the compression of {file_path}')
+            # self.logger.debug('Compressing {}'.format(file_path))
+            # fits_utils.fpack(file_path)
 
-        self.logger.debug("Adding image metadata to db: {}".format(image_id))
+        self.logger.debug(f"{self.name}: Adding image metadata to db: {image_id}")
 
         self.db.insert('observations', {
             'data': info,
@@ -645,20 +658,19 @@ class AbstractCamera(PanBase, metaclass=ABCMeta):
             headers = {}
 
         # Move the filterwheel if necessary
-        if self.filterwheel is not None:
+        if observation.filter_name is not None:
 
-            if observation.filter_name is not None:
-
+            if self.filterwheel is not None:
                 try:
                     # Move the filterwheel
                     self.filterwheel.move_to(observation.filter_name, blocking=True)
                 except Exception as e:
-                    self.logger.error(f'Error moving filterwheel on {self} to'
+                    self.logger.error(f'{self.name}: Error moving filterwheel on {self} to'
                                       f' {observation.filter_name}: {e}')
                     raise(e)
 
             else:
-                self.logger.info(f'Filter {observation.filter_name} requested by'
+                self.logger.info(f'{self.name}: Filter {observation.filter_name} requested by'
                                  ' observation but {self} has no filterwheel, using'
                                  ' {self.filter_type}.')
 
@@ -700,7 +712,7 @@ class AbstractCamera(PanBase, metaclass=ABCMeta):
             self.uid,
             start_time
         )
-        self.logger.debug("image_id: {}".format(image_id))
+        self.logger.debug(f"{self.name}: image_id: {image_id}")
 
         # Make the sequence_id
         sequence_id = '{}_{}_{}'.format(
@@ -736,7 +748,7 @@ class AbstractCamera(PanBase, metaclass=ABCMeta):
         """
         Add FITS headers from info the same as images.cr2_to_fits()
         """
-        self.logger.debug("Updating FITS headers: {}".format(file_path))
+        self.logger.debug(f"{self.name}: Updating FITS headers: {file_path}")
         fits_utils.update_observation_headers(file_path, info)
         return file_path
 
